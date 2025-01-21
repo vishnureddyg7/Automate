@@ -1,0 +1,54 @@
+import requests
+import pandas as pd
+import re
+
+# GitHub credentials
+GITHUB_TOKEN = 'add your token key'
+#REPO_OWNER = 'YOUR_REPO_OWNER'
+#REPO_NAME = 'YOUR_REPO_NAME'
+API_URL = f'add api url'
+
+# Query parameters
+params = {
+    'state': 'all',  # 'open' or 'closed' can be used
+    'labels': 'infra-related,meraki'
+}
+
+headers = {
+    "Authorization": f"Bearer {GITHUB_TOKEN}",
+    "Accept": "application/vnd.github.v3+json"
+}
+
+response = requests.get(API_URL, headers=headers, params=params)
+
+if response.status_code == 200:
+    issues = response.json()
+
+    # Extract relevant data into a DataFrame
+    data = []
+    for issue in issues:
+        # Extract labels as a string
+        labels = ', '.join(label['name'] for label in issue['labels'])
+
+        # Extract Biz Name (e.g., "Biz Name: XYZ" in the issue body)
+        biz_name_match = re.search(r'Biz Name:\s*(.*)', issue.get('body', ''))
+        biz_name = biz_name_match.group(1) if biz_name_match else 'N/A'
+        data.append({
+            'Issue Number': issue['number'],
+            'Title': issue['title'],
+            'Biz Name': biz_name,
+            'State': issue['state'],
+            'Labels': ', '.join(label['name'] for label in issue['labels']),
+            'Created At': issue['created_at'],
+            'URL': issue['html_url']
+        })
+
+    df = pd.DataFrame(data)
+
+    # Save to Excel
+    output_file = 'github_issues.xlsx'
+    df.to_excel(output_file, index=False)
+    print(f"Issues saved to {output_file}")
+    print(df)
+else:
+    print(f"Failed to fetch issues: {response.status_code} - {response.text}")
