@@ -1,0 +1,59 @@
+import pandas as pd
+
+Load CSV file
+df = pd.read_csv(r"C:\Users\lenov\Downloads\Untitled discover search (1).csv")
+
+Convert @timestamp column to datetime
+df['@timestamp'] = pd.to_datetime(df['@timestamp'], format="%b %d, %Y @ %H:%M:%S.%f")
+
+Filter relevant events
+filtered_df = df[df['event'].isin(['rqst_in_otp_login', 'rqst_out_smsgupshup'])]
+
+Sort by trace_id and timestamp
+filtered_df = filtered_df.sort_values(by=['trace_id', '@timestamp'])
+
+Process each trace_id
+results = []
+for trace_id, group in filtered_df.groupby('trace_id'):
+events = group['event'].tolist()
+timestamps = group['@timestamp'].tolist()
+
+# Get optional columns if available, even if empty
+request_args = group['request_args'].iloc[0] if 'request_args' in group and not group['request_args'].isnull().all() else None
+biz = group['biz'].iloc[0] if 'biz' in group and not group['biz'].isnull().all() else None
+mask = group['mask'].iloc[0] if 'mask' in group and not group['mask'].isnull().all() else None
+
+if 'rqst_in_otp_login' in events:
+    if 'rqst_out_smsgupshup' in events:
+        # Time difference for Gupshup
+        in_time = timestamps[events.index('rqst_in_otp_login')]
+        out_time = timestamps[events.index('rqst_out_smsgupshup')]
+        time_diff = (out_time - in_time).total_seconds() / 60
+
+        results.append({
+            'trace_id': trace_id,
+            '@timestamp': in_time,
+            'otp_provider': 'Gupshup',
+            'time_difference_minutes': time_diff,
+            'request_args': request_args,
+            'biz': biz,
+            'mask': mask
+        })
+    else:
+        # No rqst_out_smsgupshup, assume SolutionInfini
+        in_time = timestamps[events.index('rqst_in_otp_login')]
+        results.append({
+            'trace_id': trace_id,
+            '@timestamp': in_time,
+            'otp_provider': 'SolutionInfini',
+            'time_difference_minutes': None,
+            'request_args': request_args,
+            'biz': biz,
+            'mask': mask
+        })
+Convert results to DataFrame
+result_df = pd.DataFrame(results)
+
+Save to a new CSV
+result_df.to_csv('otp_provider_analysis.csv', index=False)
+print("Results saved to 'otp_provider_analysis.csv'")
