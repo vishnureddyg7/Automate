@@ -2,7 +2,7 @@ import csv
 import json
 
 # Input and output file paths
-input_file = r"C:\Users\lenov\Downloads\testing swuugy.csv"  # Replace with your input CSV file path
+input_file = r"Add CSV file here"  # Replace with your input CSV file path
 output_file = "report.csv"  # Output CSV file path
 
 # Columns for the output CSV
