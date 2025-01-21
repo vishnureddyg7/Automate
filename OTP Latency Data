@@ -1,7 +1,7 @@
 import pandas as pd
 
 Load CSV file
-df = pd.read_csv(r"C:\Users\lenov\Downloads\Untitled discover search (1).csv")
+df = pd.read_csv(r"Add the CSV file")
 
 Convert @timestamp column to datetime
 df['@timestamp'] = pd.to_datetime(df['@timestamp'], format="%b %d, %Y @ %H:%M:%S.%f")
