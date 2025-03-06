@@ -2,16 +2,32 @@ import pandas as pd
 import json
 
 # Load CSV file
+#Event: parse_estimate_response_generic_partner
+#https://logs.urbanpiper.com/app/r/s/Wutwb
+#Event: rqst_out_generic_delivery_partner_failed
+# https://logs.urbanpiper.com/app/r/s/o4loz
+# Columns - timestamp	event	trace_id	rqst_payload	resp_payload	biz_location_id
 df = pd.read_csv(r"C:\Users\lenov\Downloads\Untitled discover search (39).csv")
 
-# Set display options for full visibility
+# Set display options for better visibility
 pd.set_option('display.max_colwidth', None)
 pd.set_option('display.max_rows', None)
-pd.set_option('display.max_columns', None)
-pd.set_option('display.width', 1000)
 
-# Convert @timestamp column to datetime
-df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+#Convert @timestamp column to datetime
+df['timestamp'] = pd.to_datetime(df['timestamp'], format="%b %d, %Y @ %H:%M:%S.%f")
+
+
+# Function to safely load JSON data
+def safe_json_loads(x):
+    try:
+        return json.loads(x) if pd.notna(x) and x.strip() else {}
+    except json.JSONDecodeError:
+        #print(f"Error decoding JSON: {x}")
+        return {}
+
+# Convert rqst_payload and resp_payload from JSON strings to dictionaries
+df['rqst_payload'] = df['rqst_payload'].apply(safe_json_loads)
+df['resp_payload'] = df['resp_payload'].apply(safe_json_loads)
 
 # Filter relevant events
 filtered_df = df[df['event'].isin(['rqst_in_rider_order_estimate', 'parse_estimate_response_generic_partner'])]
@@ -21,19 +37,7 @@ filtered_df = filtered_df.sort_values(by=['trace_id', 'timestamp'])
 
 # Separate requests and responses
 requests = filtered_df[filtered_df['event'] == 'rqst_in_rider_order_estimate'][['trace_id', 'rqst_payload']]
-responses = filtered_df[filtered_df['event'] == 'parse_estimate_response_generic_partner'][['trace_id', 'resp_payload']]
-
-# Function to safely load JSON data
-def safe_json_loads(x):
-    try:
-        return json.loads(x) if pd.notna(x) and x.strip() else {}
-    except json.JSONDecodeError:
-        print(f"Error decoding JSON: {x}")
-        return {}
-
-# Convert rqst_payload and resp_payload from JSON strings to dictionaries
-requests['rqst_payload'] = requests['rqst_payload'].apply(safe_json_loads)
-responses['resp_payload'] = responses['resp_payload'].apply(safe_json_loads)
+responses = filtered_df[filtered_df['event'] == 'parse_estimate_response_generic_partner'][['trace_id', 'resp_payload', 'timestamp']]
 
 # Merge request and response data on trace_id
 merged_df = requests.merge(responses, on='trace_id', suffixes=('_req', '_resp'))
@@ -43,6 +47,9 @@ filtered_data = []
 for _, row in merged_df.iterrows():
     if row['resp_payload'].get('serviceable') is False:
         data = {
+            'trace_id': row['trace_id'],
+            'timestamp': row['timestamp'],  # From response timestamp
+            'reason_code': row['resp_payload'].get('reason_code', ''),
             'customer_phone': row['rqst_payload'].get('customer', {}).get('phone', ''),
             'customer_lat': row['rqst_payload'].get('customer', {}).get('address', {}).get('latitude', ''),
             'customer_long': row['rqst_payload'].get('customer', {}).get('address', {}).get('longitude', ''),
@@ -52,6 +59,7 @@ for _, row in merged_df.iterrows():
             'store_address': row['rqst_payload'].get('store', {}).get('address', ''),
             'pincode': row['rqst_payload'].get('customer', {}).get('address', {}).get('pin', ''),
             'store_name': row['rqst_payload'].get('store', {}).get('name', ''),
+            'store_id': row['rqst_payload'].get('store', {}).get('id', ''),
         }
         filtered_data.append(data)
 
@@ -59,6 +67,7 @@ for _, row in merged_df.iterrows():
 result_df = pd.DataFrame(filtered_data)
 
 # Save to CSV
-result_df.to_csv("serviceability_issues.csv", index=False)
+output_file = "serviceability_issues_combined.csv"
+result_df.to_csv(output_file, index=False)
 
-print("Filtered data saved to 'serviceability_issues.csv'.")
+print(f"Filtered data saved to '{output_file}'.")
