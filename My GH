@@ -1,0 +1,68 @@
+import requests
+import pandas as pd
+import re
+
+# GitHub credentials
+GITHUB_TOKEN = 'API Token'
+API_URL = 'https://api.github.com/repos/urbanpiper/incidents/issues'
+
+# GitHub headers
+headers = {
+    "Authorization": f"Bearer {GITHUB_TOKEN}",
+    "Accept": "application/vnd.github.v3+json"
+}
+
+all_issues = []
+page = 1
+
+print("Fetching all issues...")
+
+while True:
+    params = {
+        'state': 'all',
+        'per_page': 100,
+        'page': page
+    }
+
+    response = requests.get(API_URL, headers=headers, params=params)
+
+    if response.status_code != 200:
+        print(f"Failed at page {page}: {response.status_code} - {response.text}")
+        break
+
+    issues = response.json()
+
+    if not issues:
+        break  # No more issues
+
+    all_issues.extend(issues)
+    print(f"Fetched page {page}, total issues so far: {len(all_issues)}")
+    page += 1
+
+# Filter issues reported by Vishnu Gundam
+data = []
+for issue in all_issues:
+    body = issue.get('body') or ''
+    if re.search(r'Issue Reporter\s*:\s*vishnu gundam', body, re.IGNORECASE):
+        biz_name_match = re.search(r'Biz Name:\s*(.*)', body)
+        biz_name = biz_name_match.group(1).strip() if biz_name_match else 'N/A'
+
+        data.append({
+            'Issue Number': issue['number'],
+            'Title': issue['title'],
+            'Biz Name': biz_name,
+            'State': issue['state'],
+            'Labels': ', '.join(label['name'] for label in issue['labels']),
+            'Created At': issue['created_at'],
+            'URL': issue['html_url']
+        })
+
+
+# Save to Excel
+if data:
+    df = pd.DataFrame(data)
+    output_file = 'vishnu_gundam_reported_issues.xlsx'
+    df.to_excel(output_file, index=False)
+    print(f"\n✅ Saved {len(df)} issues reported by Vishnu Gundam to: {output_file}")
+else:
+    print("❌ No matching issues found.")
